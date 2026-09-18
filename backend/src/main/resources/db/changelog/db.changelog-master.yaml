@@ -5,3 +5,5 @@ databaseChangeLog:
       file: db/changelog/releases/1.0.26.0916/platform/001-release-id-worker-counter.yaml
   - include:
       file: db/changelog/releases/1.0.26.0916/walletconfig/001-release-schema.yaml
+  - include:
+      file: db/changelog/releases/1.0.26.0916/walletconfig/002-reset-dispatch-version.yaml

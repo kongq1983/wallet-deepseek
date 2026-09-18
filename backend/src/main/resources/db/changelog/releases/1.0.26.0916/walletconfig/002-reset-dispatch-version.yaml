@@ -1,0 +1,10 @@
+databaseChangeLog:
+  # 下发表版本号口径由「行级（设备×身份×钱包类型各自计数）」调整为「租户级批次号」，
+  # 历史版本号与新语义不兼容，一次性清空后由系统按当前配置全量重建。
+  # 下发表是按配置推导的派生数据，清空不会丢失任何配置，可随时通过重建接口恢复。
+  - changeSet:
+      id: 20260919-001-reset-dispatch-version
+      author: ai
+      changes:
+        - sql: |
+            TRUNCATE TABLE device_identity_wallet;

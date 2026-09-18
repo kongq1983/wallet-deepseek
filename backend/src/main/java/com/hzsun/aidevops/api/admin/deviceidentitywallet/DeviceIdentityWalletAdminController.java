@@ -2,6 +2,7 @@ package com.hzsun.aidevops.api.admin.deviceidentitywallet;
 
 import com.hzsun.aidevops.common.response.ApiResponse;
 import com.hzsun.aidevops.common.tenant.CurrentTenantProvider;
+import com.hzsun.aidevops.walletconfig.deviceidentitywallet.cmdservice.DeviceIdentityWalletCmdService;
 import com.hzsun.aidevops.walletconfig.deviceidentitywallet.qryservice.DeviceIdentityWalletQryService;
 import com.hzsun.aidevops.walletconfig.deviceidentitywallet.qryservice.dto.DeviceIdentityWalletDto;
 import com.hzsun.aidevops.walletconfig.deviceidentitywallet.qryservice.qry.DeviceIdentityWalletListQry;
@@ -16,7 +17,7 @@ import java.util.List;
 /**
  * 下发表管理端接口。
  *
- * <p>下发表只由系统根据配置自动生成与刷新，不提供人工录入与修改入口，仅开放查询。</p>
+ * <p>下发表只由系统根据配置自动生成与刷新，不提供人工录入与修改入口，仅开放查询与全量重建。</p>
  */
 @RestController
 @RequestMapping("/api/admin/device-identity-wallet")
@@ -24,6 +25,8 @@ import java.util.List;
 public class DeviceIdentityWalletAdminController {
 
     private final DeviceIdentityWalletQryService deviceIdentityWalletQryService;
+
+    private final DeviceIdentityWalletCmdService deviceIdentityWalletCmdService;
 
     private final CurrentTenantProvider currentTenantProvider;
 
@@ -37,5 +40,18 @@ public class DeviceIdentityWalletAdminController {
     public ApiResponse<List<DeviceIdentityWalletDto>> list(@RequestBody(required = false) DeviceIdentityWalletListQry qry) {
         return ApiResponse.success(deviceIdentityWalletQryService.list(
                 currentTenantProvider.currentTenantId(), qry));
+    }
+
+    /**
+     * 按当前配置全量重建下发表。
+     *
+     * <p>下发表是派生数据，本接口不做任何人工数据录入，仅用于清库或口径调整后按现有配置整体重算。</p>
+     *
+     * @return 空数据成功响应
+     */
+    @PostMapping("/rebuild")
+    public ApiResponse<Void> rebuild() {
+        deviceIdentityWalletCmdService.refreshAll(currentTenantProvider.currentTenantId());
+        return ApiResponse.success(null);
     }
 }

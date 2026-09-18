@@ -39,6 +39,12 @@ public class DeviceIdentityWalletRepositoryImpl implements DeviceIdentityWalletR
     }
 
     @Override
+    public int findMaxVersion(Long tenantId) {
+        Integer maxVersion = deviceIdentityWalletMapper.selectMaxVersion(tenantId);
+        return maxVersion == null ? 0 : maxVersion;
+    }
+
+    @Override
     public List<DeviceIdentityWallet> findByDeviceIds(Long tenantId, List<Long> deviceIds) {
         if (deviceIds.isEmpty()) {
             return List.of();

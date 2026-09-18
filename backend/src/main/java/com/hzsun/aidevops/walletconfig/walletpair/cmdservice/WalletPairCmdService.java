@@ -33,7 +33,8 @@ import java.util.stream.Collectors;
  * 租户钱包配对命令服务。
  *
  * <p>负责写流程编排与事务边界：进入领域行为前用领域规约完成业务前置校验，
- * 校验失败在此处转换为明确的业务错误码。任何配对变动都会重算受影响机构的下发表数据。</p>
+ * 校验失败在此处转换为明确的业务错误码。任何配对变动都会重算受影响机构的下发表数据；
+ * 修改配对导致工作钱包编号变化时，还会把引用旧编号的机构支付参数级联迁移到新编号。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -78,10 +79,12 @@ public class WalletPairCmdService {
         validateConfiguration(tenantId, walletPairId, configuration);
 
         int previousWorkWalletNo = walletPair.getWorkWalletNo().value();
+        int currentWorkWalletNo = configuration.workWalletNo().value();
         walletPair.updateConfiguration(configuration);
         walletPairRepository.update(walletPair);
+        migrateOrganizationWorkWallet(tenantId, previousWorkWalletNo, currentWorkWalletNo);
         // 修改前后可能仍是同一个工作钱包编号，用 Set.copyOf 去重，避免 Set.of 因重复元素抛异常
-        refreshDispatch(tenantId, Set.copyOf(List.of(previousWorkWalletNo, configuration.workWalletNo().value())));
+        refreshDispatch(tenantId, Set.copyOf(List.of(previousWorkWalletNo, currentWorkWalletNo)));
     }
 
     /**
@@ -118,6 +121,30 @@ public class WalletPairCmdService {
         if (!affectedOrganizationIds.isEmpty()) {
             deviceIdentityWalletCmdService.refreshByOrganizations(tenantId, affectedOrganizationIds);
         }
+    }
+
+    /**
+     * 工作钱包编号变更时，把引用旧编号的机构支付参数一并迁移到新编号。
+     *
+     * <p>工作钱包编号在配对表中唯一，本条配对改号后旧编号即从配对表消失；
+     * 若机构参数仍保留旧编号就会悬空（机构的工作钱包必须取自配对表），
+     * 因此在此级联改写，机构的工作钱包与追扣钱包随之整体换号，随后由下发表重算落到新号。</p>
+     *
+     * @param tenantId             租户 ID
+     * @param previousWorkWalletNo 变更前的工作钱包编号
+     * @param currentWorkWalletNo  变更后的工作钱包编号
+     */
+    private void migrateOrganizationWorkWallet(Long tenantId, int previousWorkWalletNo, int currentWorkWalletNo) {
+        if (previousWorkWalletNo == currentWorkWalletNo) {
+            return;
+        }
+        organizationPaymentConfigRepository.findAll(tenantId).stream()
+                .filter(config -> config.getWorkWalletNo() != null)
+                .filter(config -> config.getWorkWalletNo().value() == previousWorkWalletNo)
+                .forEach(config -> {
+                    config.changeWorkWallet(WalletNo.of(currentWorkWalletNo));
+                    organizationPaymentConfigRepository.update(config);
+                });
     }
 
     private WalletPairConfiguration toConfiguration(Integer workWalletNo, Integer deductWalletNo) {

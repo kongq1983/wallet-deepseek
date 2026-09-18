@@ -7,6 +7,7 @@ import com.hzsun.aidevops.walletconfig.consumeridentity.domain.ConsumerIdentityR
 import com.hzsun.aidevops.walletconfig.device.domain.Device;
 import com.hzsun.aidevops.walletconfig.device.domain.DeviceRepository;
 import com.hzsun.aidevops.walletconfig.deviceidentitywallet.domain.DeviceIdentityWallet;
+import com.hzsun.aidevops.walletconfig.deviceidentitywallet.domain.DeviceIdentityWalletFactory;
 import com.hzsun.aidevops.walletconfig.deviceidentitywallet.domain.DeviceIdentityWalletRepository;
 import com.hzsun.aidevops.walletconfig.deviceidentitywallet.domain.WalletDimension;
 import com.hzsun.aidevops.walletconfig.deviceidentitywallet.domain.WalletDispatchDomainService;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,8 +35,8 @@ import java.util.stream.Collectors;
 /**
  * 下发表命令服务。
  *
- * <p>下发表只由系统生成，无人工录入入口。任何关联配置变动都通过本服务重算受影响设备的下发表数据，
- * 由领域服务完成行级差异比较与版本号推进。</p>
+ * <p>下发表只由系统生成，无人工录入入口。任何关联配置变动都通过本服务重算受影响设备的下发表数据：
+ * 由领域服务完成行级差异比较，本服务负责批次版本号的分配与落库。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -62,7 +64,7 @@ public class DeviceIdentityWalletCmdService {
     public void refreshByDevice(Long tenantId, Long deviceId) {
         TenantIds.requireValid(tenantId);
         deviceRepository.findById(tenantId, deviceId)
-                .ifPresent(device -> refreshDevices(tenantId, List.of(device)));
+                .ifPresent(device -> refresh(tenantId, List.of(device)));
     }
 
     /**
@@ -74,11 +76,14 @@ public class DeviceIdentityWalletCmdService {
     @Transactional(rollbackFor = Exception.class)
     public void refreshByOrganization(Long tenantId, Long organizationId) {
         TenantIds.requireValid(tenantId);
-        refreshDevices(tenantId, deviceRepository.findByOrganizationId(tenantId, organizationId));
+        refresh(tenantId, deviceRepository.findByOrganizationId(tenantId, organizationId));
     }
 
     /**
      * 按机构集合重算。
+     *
+     * <p>一次配置变更对应一个批次：先把全部受影响设备聚合后只重算一次，
+     * 保证同一次变更产生的数据共用同一个批次版本号。</p>
      *
      * @param tenantId        租户 ID
      * @param organizationIds 机构 ID 集合
@@ -86,9 +91,12 @@ public class DeviceIdentityWalletCmdService {
     @Transactional(rollbackFor = Exception.class)
     public void refreshByOrganizations(Long tenantId, Collection<Long> organizationIds) {
         TenantIds.requireValid(tenantId);
+        Map<Long, Device> affectedDevices = new LinkedHashMap<>();
         for (Long organizationId : organizationIds) {
-            refreshDevices(tenantId, deviceRepository.findByOrganizationId(tenantId, organizationId));
+            deviceRepository.findByOrganizationId(tenantId, organizationId)
+                    .forEach(device -> affectedDevices.putIfAbsent(device.getId(), device));
         }
+        refresh(tenantId, List.copyOf(affectedDevices.values()));
     }
 
     /**
@@ -107,7 +115,7 @@ public class DeviceIdentityWalletCmdService {
                 .map(deviceId -> deviceRepository.findById(tenantId, deviceId))
                 .flatMap(Optional::stream)
                 .toList();
-        refreshDevices(tenantId, devices);
+        refresh(tenantId, devices);
     }
 
     /**
@@ -118,7 +126,7 @@ public class DeviceIdentityWalletCmdService {
     @Transactional(rollbackFor = Exception.class)
     public void refreshAll(Long tenantId) {
         TenantIds.requireValid(tenantId);
-        refreshDevices(tenantId, deviceRepository.findAll(tenantId));
+        refresh(tenantId, deviceRepository.findAll(tenantId));
     }
 
     /**
@@ -133,23 +141,35 @@ public class DeviceIdentityWalletCmdService {
         deviceIdentityWalletRepository.deleteByDeviceIds(tenantId, List.of(deviceId));
     }
 
-    private void refreshDevices(Long tenantId, List<Device> devices) {
+    /**
+     * 重算指定设备集合的下发表数据。
+     *
+     * <p>只有确实产生变更时才占用一个批次版本号：租户内暂无数据时从 1 开始，否则取「当前最大批次号 + 1」。
+     * 失效行保留原批次号且永久保留，因此最大批次号覆盖全部历史行，
+     * 新分配的批次号必然大于租户内任何已有行的版本号，设备侧可用「版本号大于本地」判定更新。</p>
+     *
+     * @param tenantId 租户 ID
+     * @param devices  设备集合
+     */
+    private void refresh(Long tenantId, List<Device> devices) {
         if (devices.isEmpty()) {
             return;
         }
         List<Long> deviceIds = devices.stream().map(Device::getId).toList();
         List<DeviceIdentityWallet> existingRows = deviceIdentityWalletRepository.findByDeviceIds(tenantId, deviceIds);
-        List<WalletDispatchTarget> targets = buildTargets(tenantId, devices);
-
-        WalletDispatchPlan plan = WalletDispatchDomainService.plan(idGenerator, tenantId, existingRows, targets);
+        WalletDispatchPlan plan = WalletDispatchDomainService.plan(existingRows, buildTargets(tenantId, devices));
         if (plan.isEmpty()) {
             return;
         }
+
+        int batchVersion = deviceIdentityWalletRepository.findMaxVersion(tenantId) + 1;
         if (!plan.rowsToInvalidate().isEmpty()) {
             deviceIdentityWalletRepository.updateAll(plan.rowsToInvalidate());
         }
-        if (!plan.rowsToInsert().isEmpty()) {
-            deviceIdentityWalletRepository.saveAll(plan.rowsToInsert());
+        if (!plan.targetsToInsert().isEmpty()) {
+            deviceIdentityWalletRepository.saveAll(plan.targetsToInsert().stream()
+                    .map(target -> DeviceIdentityWalletFactory.create(idGenerator, tenantId, target, batchVersion))
+                    .toList());
         }
     }
 

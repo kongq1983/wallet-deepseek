@@ -7,7 +7,8 @@ import lombok.Getter;
  * 设备身份钱包下发表聚合根（一行）。
  *
  * <p>下发表是配置态数据快照，一行代表「设备 × 交易身份 × 钱包类型」维度上的一次配置。
- * 变更采用行级 diff：旧行原地置为无效并推进版本号，新行携带更大的版本号插入。</p>
+ * 变更采用行级 diff：旧行原地置为无效、新行插入；版本号是<b>租户级批次号</b>，
+ * 失效行保留它被下发时使用的批次号、不做改写。</p>
  */
 @Getter
 public class DeviceIdentityWallet {
@@ -33,7 +34,7 @@ public class DeviceIdentityWallet {
     /** 有效标记。 */
     private boolean valid;
 
-    /** 行级版本号。 */
+    /** 下发批次版本号：同一租户内一次重算共用一个号，从 1 开始递增。 */
     private int version;
 
     private DeviceIdentityWallet(Long id, Long tenantId, WalletDimension dimension) {
@@ -82,25 +83,25 @@ public class DeviceIdentityWallet {
     /**
      * 以目标行填充内容并置为有效。
      *
-     * @param target  目标行
-     * @param version 版本号
+     * @param target       目标行
+     * @param batchVersion 本次下发批次版本号
      */
-    public void apply(WalletDispatchTarget target, int version) {
+    public void apply(WalletDispatchTarget target, int batchVersion) {
         this.walletNo = target.walletNo();
         this.deductAllowed = target.deductAllowed();
         this.offlineAllowed = target.offlineAllowed();
         this.valid = true;
-        this.version = version;
+        this.version = batchVersion;
     }
 
     /**
-     * 置为无效并推进版本号。
+     * 置为无效。
      *
-     * @param version 新的版本号
+     * <p>版本号保留该行被下发时使用的批次号：版本号表达「这批数据是哪一批下发的」，
+     * 失效只翻转有效标记，不改写批次号。</p>
      */
-    public void invalidate(int version) {
+    public void invalidate() {
         this.valid = false;
-        this.version = version;
     }
 
     /**

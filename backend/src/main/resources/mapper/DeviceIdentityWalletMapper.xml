@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hzsun.aidevops.walletconfig.deviceidentitywallet.infrastructure.mapper.DeviceIdentityWalletMapper">
+
+  <!-- 租户级批次版本号：失效行保留原号且永久保留，故 MAX 覆盖全部历史行 -->
+  <select id="selectMaxVersion" resultType="java.lang.Integer">
+    SELECT MAX(version)
+    FROM device_identity_wallet
+    WHERE tenant_id = #{tenantId}
+  </select>
+</mapper>

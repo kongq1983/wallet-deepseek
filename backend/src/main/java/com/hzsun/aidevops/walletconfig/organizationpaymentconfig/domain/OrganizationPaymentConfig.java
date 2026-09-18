@@ -102,6 +102,18 @@ public class OrganizationPaymentConfig {
     }
 
     /**
+     * 变更工作钱包编号。
+     *
+     * <p>用于钱包配对改号时的级联迁移：机构的追扣钱包由「工作钱包 + 配对表」推导，
+     * 旧编号从配对表消失后机构参数必须跟随新编号，否则配置悬空、下发表会继续下发旧编号。</p>
+     *
+     * @param workWalletNo 新的工作钱包编号
+     */
+    public void changeWorkWallet(WalletNo workWalletNo) {
+        this.workWalletNo = workWalletNo;
+    }
+
+    /**
      * 移除已删除身份在可消费身份中的引用。
      *
      * @param identityId 被删除的身份 ID

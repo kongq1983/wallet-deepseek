@@ -1,1 +1,0 @@
-import{F as e}from"./index-DSyKtWiQ.js";const s=()=>e.post("/api/admin/consumer-identity/list"),d=t=>e.post("/api/admin/consumer-identity/add",t),o=(t,n)=>e.post("/api/admin/consumer-identity/update",{id:t,...n}),a=t=>e.post("/api/admin/consumer-identity/delete",{id:t});export{d as c,a as d,s as f,o as u};

@@ -1,0 +1,1 @@
+import{F as i}from"./index-B9S7dfm3.js";const o=()=>i.post("/api/admin/organization/list"),s=a=>i.post("/api/admin/organization/add",a),r=(a,t)=>i.post("/api/admin/organization/update",{id:a,name:t});export{s as a,o as f,r};

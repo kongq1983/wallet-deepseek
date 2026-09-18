@@ -8,8 +8,10 @@ export interface WalletPairItem {
 }
 
 export interface WalletPairAddParams {
-  workWalletNo: number;
-  deductWalletNo: number;
+  /** 未填写时传 null（而非 0），由后端返回「请输入工作钱包编号」提示。 */
+  workWalletNo: number | null;
+  /** 未填写时传 null（而非 0），由后端返回「请输入追扣钱包编号」提示。 */
+  deductWalletNo: number | null;
 }
 
 export interface WalletPairUpdateParams extends WalletPairAddParams {

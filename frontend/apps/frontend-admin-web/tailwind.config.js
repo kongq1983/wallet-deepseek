@@ -9,7 +9,8 @@ export default {
   content: [
     './index.html',
     './src/**/*.{ts,tsx}',
-    '../packages/ui/src/**/*.{ts,tsx}',
+    // 相对本应用目录（frontend/apps/frontend-admin-web）需上跳两级才能到 frontend/packages/ui
+    '../../packages/ui/src/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {

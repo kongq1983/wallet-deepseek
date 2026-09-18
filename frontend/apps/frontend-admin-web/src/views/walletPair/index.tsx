@@ -45,6 +45,18 @@ interface PairFormState {
 
 const EMPTY_FORM: PairFormState = { workWalletNo: '', deductWalletNo: '' };
 
+/**
+ * 空输入必须提交 null：若折算为 0 会被后端判定为「超出 1~8 范围」，与「未填写」的提示不符。
+ */
+const toWalletNo = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 const WalletPairPage = () => {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -61,8 +73,8 @@ const WalletPairPage = () => {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const params = {
-        workWalletNo: Number(form.workWalletNo),
-        deductWalletNo: Number(form.deductWalletNo),
+        workWalletNo: toWalletNo(form.workWalletNo),
+        deductWalletNo: toWalletNo(form.deductWalletNo),
       };
       return editing ? updateWalletPair({ id: editing.id, ...params }) : addWalletPair(params);
     },
@@ -160,7 +172,16 @@ const WalletPairPage = () => {
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditing(null);
+            setForm(EMPTY_FORM);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? '修改钱包配对' : '新增钱包配对'}</DialogTitle>
@@ -168,20 +189,32 @@ const WalletPairPage = () => {
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="workWalletNo">工作钱包编号</Label>
+              <Label htmlFor="workWalletNo">
+                工作钱包编号
+                <span className="ml-0.5 text-destructive">*</span>
+              </Label>
               <Input
                 id="workWalletNo"
+                type="number"
                 inputMode="numeric"
+                min={1}
+                max={8}
                 placeholder="请输入"
                 value={form.workWalletNo}
                 onChange={(event) => setForm({ ...form, workWalletNo: event.target.value })}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="deductWalletNo">追扣钱包编号</Label>
+              <Label htmlFor="deductWalletNo">
+                追扣钱包编号
+                <span className="ml-0.5 text-destructive">*</span>
+              </Label>
               <Input
                 id="deductWalletNo"
+                type="number"
                 inputMode="numeric"
+                min={1}
+                max={8}
                 placeholder="请输入"
                 value={form.deductWalletNo}
                 onChange={(event) => setForm({ ...form, deductWalletNo: event.target.value })}

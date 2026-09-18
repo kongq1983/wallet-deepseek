@@ -1,0 +1,109 @@
+databaseChangeLog:
+  # walletconfig 上下文初始表结构：租户钱包配对、机构树、机构支付参数、机构可消费身份、身份、设备、设备身份钱包下发表。
+  # MySQL 方言（8.0.13+）：表/列注释内联声明；机构同层名称唯一与下发表有效行唯一依赖函数索引与生成列。
+  - changeSet:
+      id: 20260916-001-release-walletconfig-schema
+      author: ai
+      changes:
+        - sql: |
+            CREATE TABLE wallet_pair (
+                id BIGINT NOT NULL,
+                tenant_id BIGINT NOT NULL,
+                work_wallet_no INT NOT NULL COMMENT '工作钱包编号，取值 1~8',
+                deduct_wallet_no INT NOT NULL COMMENT '追扣钱包编号，取值 1~8',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_wallet_pair PRIMARY KEY (id),
+                CONSTRAINT uk_wallet_pair_tenant_work_wallet_no UNIQUE (tenant_id, work_wallet_no),
+                CONSTRAINT uk_wallet_pair_tenant_deduct_wallet_no UNIQUE (tenant_id, deduct_wallet_no)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='租户钱包配对：工作钱包与追扣钱包的成对配置';
+
+            CREATE TABLE organization (
+                id BIGINT NOT NULL,
+                tenant_id BIGINT NOT NULL,
+                name VARCHAR(50) NOT NULL COMMENT '机构名称',
+                org_type VARCHAR(32) NOT NULL COMMENT '机构类型：RESTAURANT 餐厅、STALL 档口、SUPERMARKET 超市',
+                superior_id BIGINT NULL COMMENT '上级机构 ID，为空表示顶层机构',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_organization PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构树：餐厅、档口、超市，最多 3 层';
+            -- 同层名称唯一：顶层机构 superior_id 为 NULL，MySQL 唯一索引不约束 NULL，故用 IFNULL 兜底为 0
+            CREATE UNIQUE INDEX uk_organization_tenant_superior_name
+                ON organization (tenant_id, (IFNULL(superior_id, 0)), name);
+            CREATE INDEX idx_organization_tenant_superior ON organization (tenant_id, superior_id);
+
+            CREATE TABLE organization_payment_config (
+                id BIGINT NOT NULL,
+                tenant_id BIGINT NOT NULL,
+                organization_id BIGINT NOT NULL COMMENT '归属机构 ID',
+                deduct_allowed BOOLEAN NOT NULL COMMENT '是否可追扣',
+                work_wallet_no INT NOT NULL COMMENT '该机构使用的工作钱包编号，追扣钱包由钱包配对隐式推导',
+                identity_restricted BOOLEAN NOT NULL COMMENT '身份限制开关：关闭时该机构全部身份可消费',
+                offline_allowed BOOLEAN NOT NULL COMMENT '是否允许脱机消费',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_organization_payment_config PRIMARY KEY (id),
+                CONSTRAINT uk_organization_payment_config_tenant_org UNIQUE (tenant_id, organization_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构支付参数：是否可追扣、工作钱包、身份限制与脱机消费';
+
+            CREATE TABLE consumer_identity (
+                id BIGINT NOT NULL,
+                tenant_id BIGINT NOT NULL,
+                name VARCHAR(50) NOT NULL COMMENT '身份名称',
+                offline_allowed BOOLEAN NOT NULL COMMENT '该身份是否允许脱机消费',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_consumer_identity PRIMARY KEY (id),
+                CONSTRAINT uk_consumer_identity_tenant_name UNIQUE (tenant_id, name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消费身份字典：学生、老师等';
+
+            CREATE TABLE organization_identity (
+                id BIGINT NOT NULL,
+                tenant_id BIGINT NOT NULL,
+                organization_id BIGINT NOT NULL COMMENT '机构 ID',
+                identity_id BIGINT NOT NULL COMMENT '身份 ID',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_organization_identity PRIMARY KEY (id),
+                CONSTRAINT uk_organization_identity_tenant_org_identity UNIQUE (tenant_id, organization_id, identity_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构可消费身份：机构允许消费的身份集合';
+
+            CREATE TABLE device (
+                id BIGINT NOT NULL,
+                tenant_id BIGINT NOT NULL,
+                serial_no VARCHAR(64) NOT NULL COMMENT '设备序列号，全局唯一',
+                device_type VARCHAR(32) NOT NULL COMMENT '设备类型：POS_MACHINE POS机、FACE_RECOGNITION_MACHINE 多媒体人脸机、OTHER 其他',
+                organization_id BIGINT NOT NULL COMMENT '归属机构 ID，创建后不可变更',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_device PRIMARY KEY (id),
+                CONSTRAINT uk_device_serial_no UNIQUE (serial_no)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消费终端设备，归属于某一个机构';
+            CREATE INDEX idx_device_tenant_organization ON device (tenant_id, organization_id);
+
+            CREATE TABLE device_identity_wallet (
+                id BIGINT NOT NULL,
+                tenant_id BIGINT NOT NULL,
+                device_id BIGINT NOT NULL COMMENT '设备 ID',
+                identity_id BIGINT NOT NULL COMMENT '交易身份 ID',
+                wallet_type VARCHAR(32) NOT NULL COMMENT '钱包类型：WORK 工作钱包、DEDUCT 追扣钱包',
+                wallet_no INT NOT NULL COMMENT '钱包编号',
+                deduct_allowed BOOLEAN NOT NULL COMMENT '是否允许追扣，取自设备所属机构的机构支付参数',
+                offline_allowed BOOLEAN NOT NULL COMMENT '是否允许脱机消费，机构允许与身份允许的逻辑与',
+                valid_flag SMALLINT NOT NULL COMMENT '有效标记：1 有效、0 无效；失效行永久保留',
+                version INT NOT NULL COMMENT '行级版本号，同一设备身份钱包类型维度上单调递增',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_device_identity_wallet PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备身份钱包下发表：设备 × 交易身份 × 钱包 的配置数据快照';
+            -- MySQL 不支持部分唯一索引：用生成列承载「有效行标记」（有效=1、无效=NULL），
+            -- 借助唯一索引不约束 NULL 的特性，保证同一维度仅允许一行有效。
+            ALTER TABLE device_identity_wallet
+                ADD COLUMN valid_marker TINYINT
+                    GENERATED ALWAYS AS (IF(valid_flag = 1, 1, NULL)) VIRTUAL
+                    COMMENT '有效行唯一性标记：有效为 1、无效为 NULL，用于模拟部分唯一索引';
+            CREATE UNIQUE INDEX uk_device_identity_wallet_valid
+                ON device_identity_wallet (tenant_id, device_id, identity_id, wallet_type, valid_marker);
+            CREATE INDEX idx_device_identity_wallet_tenant_device ON device_identity_wallet (tenant_id, device_id);
+            CREATE INDEX idx_device_identity_wallet_tenant_identity ON device_identity_wallet (tenant_id, identity_id);

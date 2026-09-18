@@ -1,0 +1,7 @@
+databaseChangeLog:
+  # 主入口只 include releases/ 下的发布态脚本，按真实依赖顺序排列。
+  # platform/ 存放跨上下文技术设施（ID 生成等），必须排在业务表之前。
+  - include:
+      file: db/changelog/releases/1.0.26.0916/platform/001-release-id-worker-counter.yaml
+  - include:
+      file: db/changelog/releases/1.0.26.0916/walletconfig/001-release-schema.yaml

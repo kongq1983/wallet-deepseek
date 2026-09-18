@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hzsun.aidevops.common.infrastructure.mapper.WorkerIdAllocatorMapper">
+
+  <!-- 自增单行计数器：超过 31 时按规范重置为 0 -->
+  <update id="increaseWorkerId">
+    UPDATE id_worker_counter
+    SET current_worker_id = CASE
+            WHEN current_worker_id + 1 > 31 THEN 0
+            ELSE current_worker_id + 1
+        END,
+        updated_at = now()
+    WHERE id = 1
+  </update>
+
+  <select id="currentWorkerId" resultType="int">
+    SELECT current_worker_id
+    FROM id_worker_counter
+    WHERE id = 1
+  </select>
+</mapper>

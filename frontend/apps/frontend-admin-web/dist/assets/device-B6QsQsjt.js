@@ -1,0 +1,1 @@
+import{F as i}from"./index-DSyKtWiQ.js";const a=e=>i.post("/api/admin/device/list",{serialNo:e}),d=e=>i.post("/api/admin/device/add",e),s=e=>i.post("/api/admin/device/delete",{id:e});export{d as a,s as d,a as f};

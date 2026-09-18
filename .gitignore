@@ -1,0 +1,46 @@
+# 编译产物
+target/
+build/
+out/
+bin/
+*.class
+*.jar
+*.war
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# 依赖
+node_modules/
+.mvn/wrapper/maven-wrapper.jar
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# 系统文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 环境变量 / 本地配置
+.env
+.env.local
+application-local.yml
+application-local.yaml
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# 工具目录
+tools/
+
+# 日志文件
+logs/

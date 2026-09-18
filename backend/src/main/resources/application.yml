@@ -1,0 +1,31 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ai-engineering-platform
+  datasource:
+    # MySQL 8.0.13+：walletconfig 表结构依赖函数索引与生成列
+    # createDatabaseIfNotExist=true 便于本地一键启动；正式环境应由 DBA 预先建库并显式指定 utf8mb4
+    url: jdbc:mysql://localhost:3306/aidevops?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true&createDatabaseIfNotExist=true
+    username: root
+    password: admin123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
+logging:
+  level:
+    com.hzsun.aidevops: debug
+    org.springframework.jdbc.core: info

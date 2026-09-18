@@ -1,0 +1,15 @@
+databaseChangeLog:
+  # 雪花算法 workerId 分配计数器：全局单行、启动时在事务内自增取得。
+  # MySQL 方言：表/列注释内联声明。
+  - changeSet:
+      id: 20260916-001-release-id-worker-counter
+      author: ai
+      changes:
+        - sql: |
+            CREATE TABLE id_worker_counter (
+                id BIGINT NOT NULL,
+                current_worker_id INT NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT pk_id_worker_counter PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='雪花算法 workerId 分配计数器，仅维护当前最大 workerId';
+            INSERT INTO id_worker_counter (id, current_worker_id, updated_at) VALUES (1, -1, NOW());

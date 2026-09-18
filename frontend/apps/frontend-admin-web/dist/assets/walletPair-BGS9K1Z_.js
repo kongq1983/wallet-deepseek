@@ -1,0 +1,1 @@
+import{F as t}from"./index-DSyKtWiQ.js";const l=()=>t.post("/api/admin/wallet-pair/list"),e=a=>t.post("/api/admin/wallet-pair/add",a),p=a=>t.post("/api/admin/wallet-pair/update",a),s=a=>t.post("/api/admin/wallet-pair/delete",{id:a});export{e as a,s as d,l as f,p as u};
